@@ -30,7 +30,7 @@ API_URL_DISTRESS = os.getenv("API_URL_DISTRESS")
 
 
 # debugging purpose
-+print(
+print(
     f"""
     {RFM95_PORT=},
     {RFM95_CS=},
