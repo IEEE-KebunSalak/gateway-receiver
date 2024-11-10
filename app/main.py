@@ -1,7 +1,7 @@
 from pyLoraRFM9x import LoRa  # type: ignore // gabisa di install di win64
 from typing import Any
 from time import sleep
-from struct_helper import read_struct
+from struct_helper import read_struct, read_distress_struct
 
 from httpx import Client
 from dotenv import load_dotenv
@@ -26,6 +26,23 @@ else:
     exit(-1)
 
 API_URL_ENDPOINT = os.getenv("API_URL_ENDPOINT")
+API_URL_DISTRESS = os.getenv("API_URL_DISTRESS")
+
+
+# debugging purpose
++print(
+    f"""
+    {RFM95_PORT=},
+    {RFM95_CS=},
+    {RFM95_INT=},
+    {RFM95_RST=},
+    {RF95_FREQ=},
+    {RF95_POW=},
+    {CLIENT_ADDRESS=},
+    {ModemConfig=},
+"""
+)
+
 
 # global objects
 lora = LoRa(
@@ -36,7 +53,7 @@ lora = LoRa(
     reset_pin=RFM95_RST,
     freq=RF95_FREQ,
     tx_power=RF95_POW,
-    modem_config=ModemConfig.Bw125Cr45Sf2048,
+    modem_config=ModemConfig.Bw125Cr48Sf4096,
     acks=True,
     receive_all=False,
 )
@@ -47,6 +64,37 @@ client = Client()
 def on_recv(payload: Any) -> None:
     """Callback function when data received from the LoRa module"""
     global current_index
+
+    # check if the payload is a distress signal
+    try:
+        payload_struct = payload.message
+        node_id, lat, lon = read_distress_struct(payload_struct)
+
+        print("From:", node_id)
+        print("Received:", f"{lat=}, {lon=}")
+        print(f"RSSI: {payload.rssi}; SNR: {payload.snr}")
+        print("---------------------------------------------------")
+
+        try:
+            response = client.post(
+                url=API_URL_DISTRESS,
+                json={
+                    "node_id": node_id,
+                    "latitude": lat,
+                    "longitude": lon,
+                },
+            )
+
+            print("[HTTP Response]:", response.status_code)
+            print("[HTTP Response]:", response.json())
+
+        except Exception as e:
+            print("[Error HTTP]:", e)
+
+        return
+
+    except:
+        pass
 
     try:
         payload_struct = payload.message
@@ -85,8 +133,8 @@ def setup() -> None:
     global lora
 
     print("[setup]: setting up LoRa module")
-    lora.set_mode_rx()
     lora.on_recv = on_recv
+    lora.set_mode_rx()
 
     print("[setup]: setup done...")
 
