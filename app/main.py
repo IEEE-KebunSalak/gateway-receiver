@@ -1,7 +1,7 @@
 from pyLoraRFM9x import LoRa  # type: ignore // gabisa di install di win64
 from typing import Any
 from time import sleep
-from struct_helper import read_struct, read_distress_struct
+from struct_helper import decode_data
 
 from httpx import Client
 from dotenv import load_dotenv
@@ -63,72 +63,55 @@ client = Client()
 
 def on_recv(payload: Any) -> None:
     """Callback function when data received from the LoRa module"""
-    global current_index
-
-    # check if the payload is a distress signal
     try:
-        payload_struct = payload.message
-        node_id, lat, lon = read_distress_struct(payload_struct)
+        # try to decode
+        data = decode_data(payload.message)
 
-        print("From:", node_id)
-        print("Received:", f"{lat=}, {lon=}")
-        print(f"RSSI: {payload.rssi}; SNR: {payload.snr}")
-        print("---------------------------------------------------")
+        if data["type"] == "GpsPayload":
+            try:
+                response = client.post(
+                    url=API_URL_DISTRESS,
+                    json={
+                        "node_id": data["node_id"],
+                        "latitude": data["latitude"],
+                        "longitude": data["longitude"],
+                        "rssi": payload.rssi,
+                        "snr": payload.snr,
+                    },
+                )
 
-        try:
-            response = client.post(
-                url=API_URL_DISTRESS,
-                json={
-                    "node_id": node_id,
-                    "latitude": lat,
-                    "longitude": lon,
-                    "rssi": payload.rssi,
-                    "snr": payload.snr,
-                },
-            )
+                print("[HTTP Response]:", response.status_code)
+                print("[HTTP Response]:", response.json())
 
-            print("[HTTP Response]:", response.status_code)
-            print("[HTTP Response]:", response.json())
+            except Exception as e:
+                print("[Error HTTP]:", e)
 
-        except Exception as e:
-            print("[Error HTTP]:", e)
+        elif data["type"] == "Payload":
+            try:
+                response = client.post(
+                    url=API_URL_ENDPOINT,
+                    json={
+                        "node_id": data["node_id"],
+                        "temperature": data["temperature"],
+                        "humidity": data["humidity"],
+                        "light": data["light"],
+                        "tip": data["tip"],
+                        "rssi": payload.rssi,
+                        "snr": payload.snr,
+                    },
+                )
 
-        return
+                print("[HTTP Response]:", response.status_code)
+                print("[HTTP Response]:", response.json())
 
-    except:
-        pass
+            except Exception as e:
+                print("[Error HTTP]:", e)
 
-    try:
-        payload_struct = payload.message
-        node_id, temp, hum, light, tip = read_struct(payload_struct)
+        else:
+            print("[Error]: Ignoring data since it's unreadable.")
 
-        print("From:", node_id)
-        print("Received:", f"{temp=}, {hum=}, {light=}, {tip=}")
-        print(f"RSSI: {payload.rssi}; SNR: {payload.snr}")
-        print("---------------------------------------------------")
-
-        try:
-            response = client.post(
-                url=API_URL_ENDPOINT,
-                json={
-                    "node_id": node_id,
-                    "temperature": temp,
-                    "humidity": hum,
-                    "light": light,
-                    "tip": tip,
-                    "rssi": payload.rssi,
-                    "snr": payload.snr,
-                },
-            )
-
-            print("[HTTP Response]:", response.status_code)
-            print("[HTTP Response]:", response.json())
-
-        except Exception as e:
-            print("[Error HTTP]:", e)
-
-    except:
-        print("[Error]: Ignoring data since it's unreadable.")
+    except ValueError as e:
+        print("[Error]: ", e)
 
 
 def setup() -> None:

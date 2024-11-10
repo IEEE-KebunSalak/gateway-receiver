@@ -6,17 +6,33 @@ STRUCT_FORMAT = "Bfffi"
 DISTRESS_STRUCT_FORMAT = "Bdd"
 
 
-def read_struct(payload: bytes) -> Tuple[int, float, float, float, int]:
-    """Read struct from bytes"""
-    data = struct.unpack(STRUCT_FORMAT, payload)
+def decode_data(data: bytes) -> dict[str, any]:
+    try:
+        # Attempt to parse as GpsPayload
+        unpacked_data = struct.unpack(DISTRESS_STRUCT_FORMAT, data)
+        _, latitude, longitude = unpacked_data
+        # Validate latitude and longitude ranges
+        if -90 <= latitude <= 90 and -180 <= longitude <= 180:
+            return {
+                "type": "GpsPayload",
+                "node_id": unpacked_data[0],
+                "latitude": latitude,
+                "longitude": longitude,
+            }
+    except struct.error:
+        pass
 
-    # id, temp, hum, light, tip
-    return data[0], data[1], data[2], data[3], data[4]
-
-
-def read_distress_struct(payload: bytes) -> Tuple[int, float, float]:
-    """Read distress struct from bytes"""
-    data = struct.unpack(DISTRESS_STRUCT_FORMAT, payload)
-
-    # id, latitude, longitude
-    return data[0], data[1], data[2]
+    try:
+        # Fallback to parse as Payload
+        unpacked_data = struct.unpack(STRUCT_FORMAT, data)
+        return {
+            "type": "Payload",
+            "node_id": unpacked_data[0],
+            "temperature": unpacked_data[1],
+            "humidity": unpacked_data[2],
+            "light": unpacked_data[3],
+            "tip": unpacked_data[4],
+        }
+    except struct.error:
+        # Handle or log errors if neither format matches
+        raise ValueError("Data does not match either struct format")
