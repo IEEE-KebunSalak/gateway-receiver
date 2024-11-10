@@ -82,6 +82,8 @@ def on_recv(payload: Any) -> None:
                     "node_id": node_id,
                     "latitude": lat,
                     "longitude": lon,
+                    "rssi": payload.rssi,
+                    "snr": payload.snr,
                 },
             )
 
@@ -114,6 +116,8 @@ def on_recv(payload: Any) -> None:
                     "humidity": hum,
                     "light": light,
                     "tip": tip,
+                    "rssi": payload.rssi,
+                    "snr": payload.snr,
                 },
             )
 
